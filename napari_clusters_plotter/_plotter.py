@@ -474,15 +474,17 @@ class PlotterWidget(QMainWindow):
             else:
                 warnings.warn("Image dimensions too high for processing!")
 
-            a, sizes, colors_plot = clustered_plot_parameters(
-                cluster_id=self.cluster_ids,
-                frame_id=frame_id,
-                current_frame=current_frame,
-                n_datapoints=number_of_points,
-                color_hex_list=colors,
-            )
+
 
             if self.plotting_type.currentText() == PlottingType.SCATTER.name:
+                a, sizes, colors_plot = clustered_plot_parameters(
+                    cluster_id=self.cluster_ids,
+                    frame_id=frame_id,
+                    current_frame=current_frame,
+                    n_datapoints=number_of_points,
+                    color_hex_list=colors,
+                )
+
                 self.graphics_widget.make_scatter_plot(
                     self.data_x, self.data_y, colors_plot, sizes, a
                 )
@@ -524,7 +526,7 @@ class PlotterWidget(QMainWindow):
                     if prediction >= 0
                     else [0, 0, 0, 0]
                 )
-                for prediction in self.cluster_ids
+                for prediction in np.unique(self.cluster_ids)
             }
             # take care of background label
             cmap_dict[0] = [0, 0, 0, 0]
@@ -595,13 +597,14 @@ class PlotterWidget(QMainWindow):
             else:
                 warnings.warn("Image dimensions too high for processing!")
 
-            a, sizes, colors_plot = unclustered_plot_parameters(
-                frame_id=frame_id,
-                current_frame=current_frame,
-                n_datapoints=number_of_points,
-            )
 
             if self.plotting_type.currentText() == PlottingType.SCATTER.name:
+                a, sizes, colors_plot = unclustered_plot_parameters(
+                    frame_id=frame_id,
+                    current_frame=current_frame,
+                    n_datapoints=number_of_points,
+                )
+
                 self.graphics_widget.make_scatter_plot(
                     self.data_x, self.data_y, colors_plot, sizes, a
                 )

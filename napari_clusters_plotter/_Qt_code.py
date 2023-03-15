@@ -517,10 +517,14 @@ class MplCanvas(FigureCanvas):
         data_y: "numpy.typing.ArrayLike",
         colors: "typing.List[str]",
         bin_number: int = 400,
+        log_scale: bool = False
     ):
         self.colors = colors
+        norm = None
+        if log_scale:
+            norm = "log"
 
-        self.axes.hist2d(data_x, data_y, bins=bin_number, cmap="magma")
+        self.axes.hist2d(data_x, data_y, bins=bin_number, cmap="magma", norm=norm)
 
         full_data = pd.concat([data_x, data_y], axis=1)
         self.selector.disconnect()

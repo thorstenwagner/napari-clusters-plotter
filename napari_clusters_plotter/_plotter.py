@@ -207,8 +207,10 @@ class PlotterWidget(QMainWindow):
 
             if self.plotting_type.currentText() == PlottingType.HISTOGRAM_2D.name:
                 self.bin_number_container.setVisible(True)
+                self.log_scale_container.setVisible(True)
             else:
                 self.bin_number_container.setVisible(False)
+                self.log_scale_container.setVisible(False)
 
         def bin_number_set():
             replot()
@@ -254,6 +256,14 @@ class PlotterWidget(QMainWindow):
         self.bin_number_manual_container.setVisible(False)
         self.bin_number_container.setVisible(False)
 
+        self.log_scale_container = QWidget()
+        self.log_scale_container.setLayout(QHBoxLayout())
+        self.log_scale_container.layout().addWidget(QLabel("Log scale:"))
+        self.log_scale = QCheckBox("")
+        self.log_scale.setChecked(False)
+        self.log_scale.stateChanged.connect(replot)
+        self.log_scale_container.layout().addWidget(self.log_scale)
+
         # Checkbox to hide non-selected clusters
         checkbox_container = QWidget()
         checkbox_container.setLayout(QHBoxLayout())
@@ -263,9 +273,11 @@ class PlotterWidget(QMainWindow):
         checkbox_container.layout().addWidget(self.plot_hide_non_selected)
 
         self.advanced_options_container.addWidget(combobox_plotting_container)
+        self.advanced_options_container.addWidget(self.log_scale_container)
         self.advanced_options_container.addWidget(self.bin_number_container)
 
         self.advanced_options_container.addWidget(checkbox_container)
+
 
         # adding all widgets to the layout
         self.layout.addWidget(label_container, alignment=Qt.AlignTop)
@@ -511,6 +523,7 @@ class PlotterWidget(QMainWindow):
                     self.data_y,
                     colors,
                     bin_number=number_bins,
+                    log_scale=self.log_scale.isChecked()
                 )
                 self.graphics_widget.show_polygons()
             self.graphics_widget.axes.set_xlabel(plot_x_axis_name)
@@ -631,6 +644,7 @@ class PlotterWidget(QMainWindow):
                     self.data_y,
                     colors,
                     bin_number=number_bins,
+                    log_scale=self.log_scale.isChecked()
                 )
             self.graphics_widget.axes.set_xlabel(plot_x_axis_name)
             self.graphics_widget.axes.set_ylabel(plot_y_axis_name)

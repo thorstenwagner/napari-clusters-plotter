@@ -372,16 +372,15 @@ class SelectFrom2DHistogram:
         self.ind_mask = path.contains_points(self.xys)
         self.ind = np.nonzero(self.ind_mask)[0]
 
+        if self.parent.manual_clustering_method is not None:
+            self.parent.manual_clustering_method(self.ind_mask)
+
         if np.any(self.ind_mask):
             p = Polygon(verts, facecolor="red", alpha=0.5)
             self.parent.polygons.append(p)
-            self.ax.add_patch(p)
-
-            self.canvas.draw_idle()
+            self.parent.show_polygons()
         else:
-            self.parent.reset_2d_histogram()
-        if self.parent.manual_clustering_method is not None:
-            self.parent.manual_clustering_method(self.ind_mask)
+            self.parent.hide_all_polygons()
 
     def disconnect(self):
         self.lasso.disconnect_events()
@@ -441,6 +440,8 @@ class SelectFromCollection:
         if np.any(self.ind_mask):
             p = Polygon(verts, facecolor="red", alpha=0.5)
             self.parent.polygons.append(p)
+        else:
+            self.parent.polygons = []
 
         self.fc[:, -1] = self.alpha_other
         self.fc[self.ind, -1] = 1
@@ -459,38 +460,17 @@ class SelectFromCollection:
 
 
 class MplCanvas(FigureCanvas):
-    def __init__(self, parent=None, width=10, height=8, manual_clustering_method=None):
+    def __init__(self, parent=None, width=7, height=4, manual_clustering_method=None):
         self.fig = Figure(figsize=(width, height), constrained_layout=True)
         self.manual_clustering_method = manual_clustering_method
 
-        # changing color of axes background to napari main window color
-        self.fig.patch.set_facecolor("#262930")
         self.axes = self.fig.add_subplot(111)
 
-        # changing color of plot background to napari main window color
-        self.axes.set_facecolor("#262930")
-
-        # polygons for 2d histogram
-        self.polygons = []
-
-        # changing colors of all axes
-        self.axes.spines["bottom"].set_color("white")
-        self.axes.spines["top"].set_color("white")
-        self.axes.spines["right"].set_color("white")
-        self.axes.spines["left"].set_color("white")
-        self.axes.xaxis.label.set_color("white")
-        self.axes.yaxis.label.set_color("white")
-
-        # changing colors of axes ticks
-        self.axes.tick_params(axis="x", colors="white")
-        self.axes.tick_params(axis="y", colors="white")
-
-        # changing colors of axes labels
-        self.axes.xaxis.label.set_color("white")
-        self.axes.yaxis.label.set_color("white")
+        self.match_napari_layout()
 
         super().__init__(self.fig)
-
+        # polygons for 2d histogram
+        self.polygons = []
         self.pts = self.axes.scatter([], [])
         self.selector = SelectFromCollection(self, self.axes, self.pts)
         self.rectangle_selector = RectangleSelector(
@@ -526,10 +506,9 @@ class MplCanvas(FigureCanvas):
         self.axes.clear()
         self.is_pressed = None
 
-    def reset_2d_histogram(self):
+    def hide_all_polygons(self):
         for p in self.polygons:
             p.remove()
-        self.polygons = []
         self.axes.figure.canvas.draw_idle()
 
     def make_2d_histogram(
@@ -539,20 +518,20 @@ class MplCanvas(FigureCanvas):
         colors: "typing.List[str]",
         bin_number: int = 400,
     ):
-        if len(colors) == 1:
-            self.polygons = [self.polygons[-1]]
+        self.colors = colors
 
-        self.axes.hist2d(data_x, data_y, bins=bin_number)  # extent=extent,
-
-        for poly_i, poly in enumerate(self.polygons):
-            poly.set_facecolor(colors[poly_i])
-            self.axes.add_patch(poly)
-
-        # ax = plt.gca()
+        self.axes.hist2d(data_x, data_y, bins=bin_number, cmap="magma")
 
         full_data = pd.concat([data_x, data_y], axis=1)
         self.selector.disconnect()
         self.selector = SelectFrom2DHistogram(self, self.axes, full_data)
+        self.axes.figure.canvas.draw_idle()
+
+    def show_polygons(self):
+        for poly_i, poly in enumerate(self.polygons):
+            c = self.colors[int(poly_i + 1) % len(self.colors)]
+            poly.set_facecolor(c)
+            self.axes.add_patch(poly)
         self.axes.figure.canvas.draw_idle()
 
     def make_scatter_plot(
@@ -576,6 +555,29 @@ class MplCanvas(FigureCanvas):
             self.axes,
             self.pts,
         )
+
+    def match_napari_layout(self):
+        """Change background and axes colors to match napari layout"""
+        # changing color of axes background to napari main window color
+        self.fig.patch.set_facecolor("#262930")
+        # changing color of plot background to napari main window color
+        self.axes.set_facecolor("#262930")
+
+        # changing colors of all axes
+        self.axes.spines["bottom"].set_color("white")
+        self.axes.spines["top"].set_color("white")
+        self.axes.spines["right"].set_color("white")
+        self.axes.spines["left"].set_color("white")
+        self.axes.xaxis.label.set_color("white")
+        self.axes.yaxis.label.set_color("white")
+
+        # changing colors of axes ticks
+        self.axes.tick_params(axis="x", colors="white")
+        self.axes.tick_params(axis="y", colors="white")
+
+        # changing colors of axes labels
+        self.axes.xaxis.label.set_color("white")
+        self.axes.yaxis.label.set_color("white")
 
 
 # overriding NavigationToolbar method to change the background and axes colors of saved figure
@@ -624,21 +626,6 @@ class MyNavigationToolbar(NavigationToolbar):
 
         super().save_figure()
 
-        # changing background color back to napari's dark theme color
-        self.canvas.fig.set_facecolor("#262930")
-        self.canvas.fig.axes[0].set_facecolor("#262930")
-
-        # changing other colors back to white
-        self.canvas.axes.spines["bottom"].set_color("white")
-        self.canvas.axes.spines["top"].set_color("white")
-        self.canvas.axes.spines["right"].set_color("white")
-        self.canvas.axes.spines["left"].set_color("white")
-
-        # changing colors of axes ticks and labels back to white
-        self.canvas.axes.tick_params(axis="x", colors="white")
-        self.canvas.axes.tick_params(axis="y", colors="white")
-
-        self.canvas.axes.xaxis.label.set_color("white")
-        self.canvas.axes.yaxis.label.set_color("white")
+        self.canvas.match_napari_layout()
 
         self.canvas.draw()

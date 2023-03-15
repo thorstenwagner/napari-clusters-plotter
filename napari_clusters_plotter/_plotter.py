@@ -65,6 +65,7 @@ class PlotterWidget(QMainWindow):
         self.scrollArea = QScrollArea()
         self.setCentralWidget(self.scrollArea)
         self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setMinimumWidth(400)
         self.scrollArea.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.contents = QWidget()
@@ -95,6 +96,9 @@ class PlotterWidget(QMainWindow):
                 features.update(pd.DataFrame(former_clusters, columns=[clustering_ID]))
             else:
                 features[clustering_ID] = inside.astype(int)
+                if self.graphics_widget.polygons and np.any(inside):
+                    self.graphics_widget.polygons = []
+
             add_column_to_layer_tabular_data(
                 self.analysed_layer, clustering_ID, features[clustering_ID]
             )
@@ -190,6 +194,7 @@ class PlotterWidget(QMainWindow):
                     self.plot_y_axis_name,
                     plot_cluster_name=clustering_ID,
                 )
+
             except AttributeError:
                 # In this case, replotting is not yet possible
                 pass
@@ -259,6 +264,7 @@ class PlotterWidget(QMainWindow):
 
         self.advanced_options_container.addWidget(combobox_plotting_container)
         self.advanced_options_container.addWidget(self.bin_number_container)
+
         self.advanced_options_container.addWidget(checkbox_container)
 
         # adding all widgets to the layout
@@ -266,7 +272,9 @@ class PlotterWidget(QMainWindow):
         self.layout.addWidget(labels_layer_selection_container, alignment=Qt.AlignTop)
         self.layout.addWidget(axes_container, alignment=Qt.AlignTop)
         self.layout.addWidget(cluster_container, alignment=Qt.AlignTop)
+
         self.layout.addWidget(self.advanced_options_container, alignment=Qt.AlignTop)
+
         self.layout.addWidget(update_container, alignment=Qt.AlignTop)
         self.layout.addWidget(run_container, alignment=Qt.AlignTop)
         self.layout.setSpacing(0)
@@ -421,7 +429,6 @@ class PlotterWidget(QMainWindow):
             # don't redraw in case the plot is invisible anyway
             return
 
-
         # check whether given axes names exist and if not don't redraw
         if (
             plot_x_axis_name not in features.columns
@@ -448,7 +455,7 @@ class PlotterWidget(QMainWindow):
         tracking_data = (
             len(self.analysed_layer.data.shape) == 4 and "frame" not in features.keys()
         )
-
+        colors = get_nice_colormap()
         if (
             plot_cluster_name is not None
             and plot_cluster_name != "label"
@@ -464,7 +471,6 @@ class PlotterWidget(QMainWindow):
             self.cluster_ids = features[plot_cluster_name].fillna(-1)
 
             # get long colormap from function
-            colors = get_nice_colormap()
             if len(self.analysed_layer.data.shape) == 4 and not tracking_data:
                 frame_id = features[POINTER].tolist()
                 current_frame = self.frame
@@ -473,8 +479,6 @@ class PlotterWidget(QMainWindow):
                 current_frame = None
             else:
                 warnings.warn("Image dimensions too high for processing!")
-
-
 
             if self.plotting_type.currentText() == PlottingType.SCATTER.name:
                 a, sizes, colors_plot = clustered_plot_parameters(
@@ -489,11 +493,6 @@ class PlotterWidget(QMainWindow):
                     self.data_x, self.data_y, colors_plot, sizes, a
                 )
             else:
-                cluster_colors = [
-                    colors[int(x) % len(colors)]
-                    for x in np.unique(self.cluster_ids)[1:]
-                ]
-
                 if self.bin_auto.isChecked():
                     number_bins = int(
                         np.max(
@@ -510,9 +509,13 @@ class PlotterWidget(QMainWindow):
                 self.graphics_widget.make_2d_histogram(
                     self.data_x,
                     self.data_y,
-                    cluster_colors,
+                    colors,
                     bin_number=number_bins,
                 )
+                self.graphics_widget.show_polygons()
+            self.graphics_widget.axes.set_xlabel(plot_x_axis_name)
+            self.graphics_widget.axes.set_ylabel(plot_y_axis_name)
+            self.graphics_widget.match_napari_layout()
 
             from vispy.color import Color
 
@@ -597,7 +600,6 @@ class PlotterWidget(QMainWindow):
             else:
                 warnings.warn("Image dimensions too high for processing!")
 
-
             if self.plotting_type.currentText() == PlottingType.SCATTER.name:
                 a, sizes, colors_plot = unclustered_plot_parameters(
                     frame_id=frame_id,
@@ -609,7 +611,7 @@ class PlotterWidget(QMainWindow):
                     self.data_x, self.data_y, colors_plot, sizes, a
                 )
             else:
-                self.graphics_widget.reset_2d_histogram()
+                self.graphics_widget.hide_all_polygons()
 
                 if self.bin_auto.isChecked():
                     number_bins = int(
@@ -627,15 +629,12 @@ class PlotterWidget(QMainWindow):
                 self.graphics_widget.make_2d_histogram(
                     self.data_x,
                     self.data_y,
-                    [],
+                    colors,
                     bin_number=number_bins,
                 )
+            self.graphics_widget.axes.set_xlabel(plot_x_axis_name)
+            self.graphics_widget.axes.set_ylabel(plot_y_axis_name)
+            self.graphics_widget.match_napari_layout()
 
             self.graphics_widget.draw()  # Only redraws when cluster is not manually selected
-            # because manual selection already does that elsewhere
-
-        self.graphics_widget.axes.xaxis.label.set_color("white")
-        self.graphics_widget.axes.yaxis.label.set_color("white")
-
-        self.graphics_widget.axes.set_xlabel(plot_x_axis_name)
-        self.graphics_widget.axes.set_ylabel(plot_y_axis_name)
+            # because manual selection already does that when selector is disconnected

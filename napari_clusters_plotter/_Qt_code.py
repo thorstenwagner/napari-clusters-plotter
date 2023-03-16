@@ -465,6 +465,7 @@ class MplCanvas(FigureCanvas):
         self.manual_clustering_method = manual_clustering_method
 
         self.axes = self.fig.add_subplot(111)
+        self.histogram = None
 
         self.match_napari_layout()
 
@@ -524,7 +525,8 @@ class MplCanvas(FigureCanvas):
         if log_scale:
             norm = "log"
 
-        self.axes.hist2d(data_x, data_y, bins=bin_number, cmap="magma", norm=norm)
+        h, xedges, yedges, _ = self.axes.hist2d(data_x, data_y, bins=bin_number, cmap="magma", norm=norm, alpha=0.5)
+        self.histogram = (h, xedges, yedges)
 
         full_data = pd.concat([data_x, data_y], axis=1)
         self.selector.disconnect()

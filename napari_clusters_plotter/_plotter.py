@@ -1,5 +1,6 @@
 import os
 import warnings
+import typing
 from enum import Enum, auto
 
 import numpy as np
@@ -9,6 +10,8 @@ from napari_tools_menu import register_dock_widget
 from qtpy import QtWidgets
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QGuiApplication, QIcon
+from PIL import ImageColor
+from typing import List
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -98,7 +101,6 @@ class PlotterWidget(QMainWindow):
                 features[clustering_ID] = inside.astype(int)
                 if self.graphics_widget.polygons and np.any(inside):
                     self.graphics_widget.polygons = []
-
             add_column_to_layer_tabular_data(
                 self.analysed_layer, clustering_ID, features[clustering_ID]
             )
@@ -425,6 +427,48 @@ class PlotterWidget(QMainWindow):
         self.plot_y_axis.setCurrentIndex(former_y_axis)
         self.plot_cluster_id.setCurrentIndex(former_cluster_id)
 
+    def make_image(self,
+                   cluster_id: str,
+                   features: pd.DataFrame,
+                   histogram_data: typing.Tuple,
+                   feature_x: str,
+                   feature_y: str,
+                   colors: List[str]) -> np.array:
+        def get_bin(v, bins):
+            return (v < bins).argmax()
+
+        h, xedges, yedges = histogram_data
+        clusters = features[cluster_id]
+        cluster_data = {}
+        color_map = {}
+        for cluster in np.unique(clusters)[1:]:
+            entries = features.loc[features[cluster_id] == cluster, :]
+            x_bin = np.array([get_bin(v, xedges) for v in entries[feature_x]])
+            y_bin = np.array([get_bin(v, yedges) for v in entries[feature_y]])
+
+            rgb = [float(v) / 255 for v in list(ImageColor.getcolor(colors[int(cluster) % len(colors)], "RGB"))]
+            rgb.append(1)
+            color_map[cluster] = rgb
+
+            for i in range(len(x_bin)):
+                bin_key = (x_bin[i], y_bin[i])
+                if bin_key in cluster_data:
+                    if cluster in cluster_data[bin_key]:
+                        cluster_data[bin_key][cluster] = cluster_data[bin_key][cluster] + 1
+                    else:
+                        cluster_data[bin_key][cluster] = 1
+                else:
+                    cluster_data[bin_key] = {cluster: 1}
+
+        rgb_img = np.zeros((h.shape[0], h.shape[1], 4))
+        rgb_img[:, :, 3] = 0  # make everything fully transparent
+
+        for bin_key in cluster_data:
+            mode_cluster = max(cluster_data[bin_key], key=cluster_data[bin_key].get)
+            rgb_img[bin_key[1], bin_key[0], :] = color_map[mode_cluster]
+
+        return rgb_img
+
     def run(
         self,
         features: pd.DataFrame,
@@ -525,7 +569,21 @@ class PlotterWidget(QMainWindow):
                     bin_number=number_bins,
                     log_scale=self.log_scale.isChecked()
                 )
-                self.graphics_widget.show_polygons()
+                #self.graphics_widget.show_polygons()
+                rgb_img = self.make_image(
+                    cluster_id=plot_cluster_name,
+                    features=features,
+                    feature_x=self.plot_x_axis_name,
+                    feature_y=self.plot_y_axis_name,
+                    colors=colors,
+                    histogram_data=self.graphics_widget.histogram
+                )
+                xedges = self.graphics_widget.histogram[1]
+                yedges = self.graphics_widget.histogram[2]
+
+                self.graphics_widget.axes.imshow(rgb_img, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], origin='lower')
+                self.graphics_widget.figure.canvas.draw_idle()
+
             self.graphics_widget.axes.set_xlabel(plot_x_axis_name)
             self.graphics_widget.axes.set_ylabel(plot_y_axis_name)
             self.graphics_widget.match_napari_layout()

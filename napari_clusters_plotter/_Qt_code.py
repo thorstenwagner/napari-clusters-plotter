@@ -374,13 +374,14 @@ class SelectFrom2DHistogram:
 
         if self.parent.manual_clustering_method is not None:
             self.parent.manual_clustering_method(self.ind_mask)
-
+        '''
         if np.any(self.ind_mask):
             p = Polygon(verts, facecolor="red", alpha=0.5)
             self.parent.polygons.append(p)
             self.parent.show_polygons()
         else:
             self.parent.hide_all_polygons()
+        '''
 
     def disconnect(self):
         self.lasso.disconnect_events()
@@ -436,12 +437,13 @@ class SelectFromCollection:
         path = Path(verts)
         self.ind_mask = path.contains_points(self.xys)
         self.ind = np.nonzero(self.ind_mask)[0]
-
+        '''
         if np.any(self.ind_mask):
             p = Polygon(verts, facecolor="red", alpha=0.5)
             self.parent.polygons.append(p)
         else:
             self.parent.polygons = []
+        '''
 
         self.fc[:, -1] = self.alpha_other
         self.fc[self.ind, -1] = 1
@@ -524,8 +526,11 @@ class MplCanvas(FigureCanvas):
         norm = None
         if log_scale:
             norm = "log"
-
-        h, xedges, yedges, _ = self.axes.hist2d(data_x, data_y, bins=bin_number, cmap="magma", norm=norm, alpha=0.5)
+        h, xedges, yedges = np.histogram2d(data_x, data_y, bins=bin_number)
+        self.axes.imshow(h.T, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], origin='lower',  cmap='magma', aspect='auto', norm = norm)
+        self.axes.set_xlim(xedges[0], xedges[-1])
+        self.axes.set_ylim(yedges[0], yedges[-1])
+       # h, xedges, yedges, _ = self.axes.hist2d(data_x, data_y, bins=bin_number, cmap="magma", norm=norm, alpha=1)
         self.histogram = (h, xedges, yedges)
 
         full_data = pd.concat([data_x, data_y], axis=1)

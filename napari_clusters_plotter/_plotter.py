@@ -1,18 +1,18 @@
 import os
-import warnings
 import typing
+import warnings
 from enum import Enum, auto
+from typing import List
 
 import numpy as np
-import pandas
 import pandas as pd
 from matplotlib.figure import Figure
 from napari_tools_menu import register_dock_widget
+from PIL import ImageColor
 from qtpy import QtWidgets
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QGuiApplication, QIcon
 from PIL import ImageColor
-from typing import List
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -280,7 +280,6 @@ class PlotterWidget(QMainWindow):
 
         self.advanced_options_container.addWidget(checkbox_container)
 
-
         # adding all widgets to the layout
         self.layout.addWidget(label_container, alignment=Qt.AlignTop)
         self.layout.addWidget(labels_layer_selection_container, alignment=Qt.AlignTop)
@@ -427,29 +426,41 @@ class PlotterWidget(QMainWindow):
         self.plot_y_axis.setCurrentIndex(former_y_axis)
         self.plot_cluster_id.setCurrentIndex(former_cluster_id)
 
-    def make_cluster_overlay_img(self,
-                                 cluster_id: str,
-                                 features: pd.DataFrame,
-                                 histogram_data: typing.Tuple,
-                                 feature_x: str,
-                                 feature_y: str,
-                                 colors: List[str]) -> np.array:
+    def make_cluster_overlay_img(
+        self,
+        cluster_id: str,
+        features: pd.DataFrame,
+        histogram_data: typing.Tuple,
+        feature_x: str,
+        feature_y: str,
+        colors: List[str],
+    ) -> np.array:
         h, xedges, yedges = histogram_data
 
-        relevant_entries = features.loc[features[cluster_id] != features[cluster_id].min(), [cluster_id, feature_x, feature_y]]
+        relevant_entries = features.loc[
+            features[cluster_id] != features[cluster_id].min(),
+            [cluster_id, feature_x, feature_y],
+        ]
 
-        output = np.zeros((*h.shape, 4), dtype=float)
+        cluster_overlay_rgba = np.zeros((*h.shape, 4), dtype=float)
         output_max = np.zeros(h.shape, dtype=float)
 
         for cluster, entries in relevant_entries.groupby(cluster_id):
-            h2, _, _ = np.histogram2d(entries[feature_x], entries[feature_y], bins=[xedges, yedges])
+            h2, _, _ = np.histogram2d(
+                entries[feature_x], entries[feature_y], bins=[xedges, yedges]
+            )
             mask = h2 > output_max
             np.maximum(h2, output_max, out=output_max)
-            rgb = [float(v) / 255 for v in list(ImageColor.getcolor(colors[int(cluster) % len(colors)], "RGB"))]
-            rgb.append(0.9)
-            output[mask] = rgb
+            rgba = [
+                float(v) / 255
+                for v in list(
+                    ImageColor.getcolor(colors[int(cluster) % len(colors)], "RGB")
+                )
+            ]
+            rgba.append(0.9)
+            cluster_overlay_rgba[mask] = rgba
 
-        return output.swapaxes(0, 1)
+        return cluster_overlay_rgba.swapaxes(0, 1)
 
     def run(
         self,
@@ -458,12 +469,13 @@ class PlotterWidget(QMainWindow):
         plot_y_axis_name: str,
         plot_cluster_name=None,
         redraw_cluster_image=True,
-        force_redraw:bool=False
+        force_redraw: bool = False,
     ):
         """
         This function that runs after the run button is clicked.
         """
-        if not self.isVisible() and force_redraw == False:
+
+        if not self.isVisible() and force_redraw is False:
             # don't redraw in case the plot is invisible anyway
             return
 
@@ -506,6 +518,7 @@ class PlotterWidget(QMainWindow):
 
             # fill all prediction nan values with -1 -> turns them
             # into noise points
+            self.label_ids = features["label"]
             self.cluster_ids = features[plot_cluster_name].fillna(-1)
 
             # get long colormap from function
@@ -549,24 +562,27 @@ class PlotterWidget(QMainWindow):
                     self.data_y,
                     colors,
                     bin_number=number_bins,
-                    log_scale=self.log_scale.isChecked()
+                    log_scale=self.log_scale.isChecked(),
                 )
-                #self.graphics_widget.show_polygons()
-                from timeit import default_timer as timer
-                start = timer()
+
                 rgb_img = self.make_cluster_overlay_img(
                     cluster_id=plot_cluster_name,
                     features=features,
                     feature_x=self.plot_x_axis_name,
                     feature_y=self.plot_y_axis_name,
                     colors=colors,
-                    histogram_data=self.graphics_widget.histogram
+                    histogram_data=self.graphics_widget.histogram,
                 )
-                print("Image made in:", timer()-start)
                 xedges = self.graphics_widget.histogram[1]
                 yedges = self.graphics_widget.histogram[2]
 
-                self.graphics_widget.axes.imshow(rgb_img, extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], origin='lower',alpha=1, aspect='auto')
+                self.graphics_widget.axes.imshow(
+                    rgb_img,
+                    extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]],
+                    origin="lower",
+                    alpha=1,
+                    aspect="auto",
+                )
                 self.graphics_widget.figure.canvas.draw_idle()
 
             self.graphics_widget.axes.set_xlabel(plot_x_axis_name)
@@ -599,7 +615,10 @@ class PlotterWidget(QMainWindow):
                 if len(self.analysed_layer.data.shape) == 4:
                     if not tracking_data:
                         max_timepoint = features[POINTER].max() + 1
-
+                        label_id_list_per_timepoint = [
+                            features.loc[features[POINTER] == i]["label"].tolist()
+                            for i in range(int(max_timepoint))
+                        ]
                         prediction_lists_per_timepoint = [
                             features.loc[features[POINTER] == i][
                                 plot_cluster_name
@@ -607,18 +626,24 @@ class PlotterWidget(QMainWindow):
                             for i in range(int(max_timepoint))
                         ]
                     else:
+                        label_id_list_per_timepoint = [
+                            features[plot_cluster_name].tolist()
+                            for i in range(self.analysed_layer.data.shape[0])
+                        ]
                         prediction_lists_per_timepoint = [
                             features[plot_cluster_name].tolist()
                             for i in range(self.analysed_layer.data.shape[0])
                         ]
 
                     cluster_image = dask_cluster_image_timelapse(
-                        self.analysed_layer.data, prediction_lists_per_timepoint
+                        self.analysed_layer.data,
+                        label_id_list_per_timepoint,
+                        prediction_lists_per_timepoint,
                     )
 
                 elif len(self.analysed_layer.data.shape) <= 3:
                     cluster_image = generate_cluster_image(
-                        self.analysed_layer.data, self.cluster_ids
+                        self.analysed_layer.data, self.label_ids, self.cluster_ids
                     )
                 else:
                     warnings.warn("Image dimensions too high for processing!")
@@ -667,8 +692,6 @@ class PlotterWidget(QMainWindow):
                     self.data_x, self.data_y, colors_plot, sizes, a
                 )
             else:
-                #self.graphics_widget.hide_all_polygons()
-
                 if self.bin_auto.isChecked():
                     number_bins = int(
                         np.max(
@@ -681,15 +704,14 @@ class PlotterWidget(QMainWindow):
                     self.bin_number_spinner.setValue(number_bins)
                 else:
                     number_bins = int(self.bin_number_spinner.value())
-                #self.graphics_widget.axes.clear()
+
                 self.graphics_widget.make_2d_histogram(
                     self.data_x,
                     self.data_y,
                     colors,
                     bin_number=number_bins,
-                    log_scale=self.log_scale.isChecked()
+                    log_scale=self.log_scale.isChecked(),
                 )
-
             self.graphics_widget.axes.set_xlabel(plot_x_axis_name)
             self.graphics_widget.axes.set_ylabel(plot_y_axis_name)
             self.graphics_widget.match_napari_layout()
